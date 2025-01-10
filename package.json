@@ -1,0 +1,20 @@
+{
+    "name": "express-ci-cd-demo",
+    "version": "1.0.0",
+    "description": "Demo application for GitHub Actions CI/CD",
+    "main": "app.js",
+    "scripts": {
+      "start": "node app.js",
+      "test": "jest --coverage",
+      "lint": "eslint .",
+      "build": "echo 'Build step - could include transpilation, bundling, etc.'"
+    },
+    "dependencies": {
+      "express": "^4.18.2"
+    },
+    "devDependencies": {
+      "jest": "^29.7.0",
+      "supertest": "^6.3.3",
+      "eslint": "^8.56.0"
+    }
+  }
