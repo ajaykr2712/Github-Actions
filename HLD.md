@@ -36,3 +36,42 @@ on:
     - cron: '0 0 * * *'
 
 ```
+## 1.3 Jobs
+Jobs define units of work in a workflow.
+
+Each job runs independently unless dependencies are defined.
+
+They can run in parallel or sequentially.
+
+Example with dependencies:
+```
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Build the project
+        run: npm run build
+
+  test:
+    needs: build  # Runs only after 'build' job completes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tests
+        run: npm test
+
+```
+
+## 1.4 Runners
+A runner is a virtual machine that executes the workflow jobs.
+
+GitHub-hosted runners: Pre-configured environments (ubuntu-latest, windows-latest, macos-latest).
+
+Self-hosted runners: Custom environments hosted on private infrastructure.
+
+Example of running on a Windows environment:
+```
+runs-on: windows-latest
+
+```
