@@ -88,3 +88,42 @@ steps:
   - name: Run a script
     run: echo "Hello, GitHub Actions!"
 ```
+
+### Actions
+Actions are reusable components inside workflows. They can be:
+- **Official GitHub actions** (e.g., `actions/checkout`, `actions/setup-node`).
+- **Community actions** from the GitHub Marketplace.
+- **Custom actions** stored in repositories.
+
+Example of using an official GitHub action to set up Node.js:
+
+```yaml
+steps:
+  - name: Set up Node.js
+    uses: actions/setup-node@v3
+    with:
+      node-version: '16'
+```
+
+### Artifacts and Caching
+GitHub Actions allows storing and caching files to improve workflow efficiency.
+
+- **Caching dependencies**:
+  ```yaml
+  - name: Cache Node modules
+    uses: actions/cache@v3
+    with:
+      path: ~/.npm
+      key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      restore-keys: |
+        ${{ runner.os }}-node-
+  ```
+
+- **Uploading build artifacts**:
+  ```yaml
+  - name: Upload Build Artifact
+    uses: actions/upload-artifact@v3
+    with:
+      name: my-artifact
+      path: dist/
+  ```
