@@ -156,3 +156,55 @@ jobs:
       - name: Deploy to S3
         run: aws s3 sync ./build s3://my-bucket-name --delete
 ```
+### Running a Python Script on Schedule
+```yaml
+name: Daily Python Job
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Runs daily at 2 AM UTC
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script
+        run: python script.py
+```
+### Using Secrets for Secure Credentials
+```yaml
+steps:
+  - name: Authenticate API
+    run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com/data
+```
+
+## Debugging and Best Practices
+
+### Debugging Workflows
+- Use `ACTIONS_RUNNER_DEBUG` to enable verbose logging:
+  ```yaml
+  env:
+    ACTIONS_RUNNER_DEBUG: true
+  ```
+- Use the `actions/upload-artifact` action to store logs for debugging.
+
+### Best Practices
+✅ **Use job dependencies** (`needs:`) to control execution flow.  
+✅ **Use caching** to speed up builds.  
+✅ **Use matrix strategy** to test on multiple platforms.  
+✅ **Use reusable workflows** to avoid duplication.  
+✅ **Secure credentials** using GitHub secrets.  
+
+## Conclusion
+GitHub Actions is a powerful automation tool for CI/CD workflows. By leveraging **workflows, jobs, runners, caching, secrets, and matrix builds**, developers can create scalable pipelines for testing, deployment, and monitoring.
