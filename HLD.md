@@ -17,3 +17,22 @@ jobs:
       - name: Run tests
         run: npm test
 ```
+
+## 1.2 Events
+Events are triggers that start a workflow. Some common events include:
+
+push: When a commit is pushed to a branch.
+
+pull_request: When a PR is created or updated.
+
+schedule: Time-based triggers using cron syntax.
+
+workflow_dispatch: Manually triggered workflows.
+
+Example of a scheduled event running at midnight daily:
+```
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+```
