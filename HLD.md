@@ -1,7 +1,7 @@
 # GitHub Actions - High-Level Design (HLD) Overview
 GitHub Actions is a CI/CD (Continuous Integration and Continuous Deployment) automation tool that enables developers to automate workflows, run tests, and deploy applications directly from a GitHub repository. It works by defining workflows using YAML files that get triggered by events such as pushes, pull requests, and schedule-based executions.
 
-## 1.1 Workflows
+### Workflows
 A workflow is an automated process defined in a repository. Workflows are written in YAML and stored in .github/workflows/.
 ```
 name: CI Workflow  # Workflow name
@@ -18,7 +18,7 @@ jobs:
         run: npm test
 ```
 
-## 1.2 Events
+### Events
 Events are triggers that start a workflow. Some common events include:
 
 push: When a commit is pushed to a branch.
@@ -36,7 +36,7 @@ on:
     - cron: '0 0 * * *'
 
 ```
-## 1.3 Jobs
+###  Jobs
 Jobs define units of work in a workflow.
 
 Each job runs independently unless dependencies are defined.
@@ -63,7 +63,7 @@ jobs:
 
 ```
 
-## 1.4 Runners
+###  Runners
 A runner is a virtual machine that executes the workflow jobs.
 
 GitHub-hosted runners: Pre-configured environments (ubuntu-latest, windows-latest, macos-latest).
@@ -76,7 +76,7 @@ runs-on: windows-latest
 
 ```
 
-# 1.5 Steps
+### Steps
 Steps are individual tasks inside a job.
 
 They can use actions (prebuilt reusable steps) or run commands.
@@ -127,3 +127,32 @@ GitHub Actions allows storing and caching files to improve workflow efficiency.
       name: my-artifact
       path: dist/
   ```
+
+## Advanced GitHub Actions Use Cases
+
+### Deploying to AWS S3
+```yaml
+name: Deploy to S3
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to S3
+        run: aws s3 sync ./build s3://my-bucket-name --delete
+```
