@@ -75,3 +75,16 @@ Example of running on a Windows environment:
 runs-on: windows-latest
 
 ```
+
+# 1.5 Steps
+Steps are individual tasks inside a job.
+
+They can use actions (prebuilt reusable steps) or run commands.
+
+```yaml
+steps:
+  - name: Checkout code
+    uses: actions/checkout@v3
+  - name: Run a script
+    run: echo "Hello, GitHub Actions!"
+```
