@@ -1,0 +1,142 @@
+name: Release Workflow
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.2.3)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a prerelease?'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  prepare-release:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "::set-output name=version::${{ github.event.inputs.version }}"
+            echo "::set-output name=prerelease::${{ github.event.inputs.prerelease }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "::set-output name=version::${VERSION}"
+            if [[ "$VERSION" == *"-alpha"* || "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
+              echo "::set-output name=prerelease::true"
+            else
+              echo "::set-output name=prerelease::false"
+            fi
+          fi
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@v4.0.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create release archive
+        run: |
+          zip -r release-${{ steps.version.outputs.version }}.zip dist/
+          tar -czf release-${{ steps.version.outputs.version }}.tar.gz dist/
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-artifacts
+          path: |
+            release-${{ steps.version.outputs.version }}.zip
+            release-${{ steps.version.outputs.version }}.tar.gz
+          retention-days: 7
+
+  create-release:
+    name: Create GitHub Release
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: release-artifacts
+          path: ./artifacts
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "::set-output name=version::${{ github.event.inputs.version }}"
+            echo "::set-output name=prerelease::${{ github.event.inputs.prerelease }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "::set-output name=version::${VERSION}"
+            if [[ "$VERSION" == *"-alpha"* || "$VERSION" == *"-beta"* || "$VERSION" == *"-rc"* ]]; then
+              echo "::set-output name=prerelease::true"
+            else
+              echo "::set-output name=prerelease::false"
+            fi
+          fi
+      
+      - name: Generate changelog
+        id: changelog
+        uses: metcalfc/changelog-generator@v4.0.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## What's Changed
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ## Installation
+            Download the appropriate package for your platform and follow the installation instructions in the documentation.
+          files: |
+            ./artifacts/release-${{ steps.version.outputs.version }}.zip
+            ./artifacts/release-${{ steps.version.outputs.version }}.tar.gz
+          draft: false
+          prerelease: ${{ steps.version.outputs.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-release:
+    name: Deploy Release
+    needs: create-release
+    uses: ./.github/workflows/reusable-deploy.yml
+    with:
+      environment: production
+      artifact-name: release-artifacts
+      deploy-path: ./release
+    secrets:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      ENV_VARS: ${{ secrets.PRODUCTION_ENV_VARS }}
