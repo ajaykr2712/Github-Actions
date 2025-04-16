@@ -1,0 +1,113 @@
+name: Reusable Deployment Workflow
+
+# This is a reusable workflow that can be called from other workflows
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: 'The environment to deploy to (e.g., dev, staging, production)'
+      artifact-name:
+        required: true
+        type: string
+        description: 'Name of the artifact to deploy'
+      deploy-path:
+        required: false
+        type: string
+        default: 'dist'
+        description: 'Path where artifacts should be extracted'
+    secrets:
+      DEPLOY_TOKEN:
+        required: true
+        description: 'Token used for deployment authentication'
+      ENV_VARS:
+        required: false
+        description: 'Environment-specific variables in JSON format'
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy-step.outputs.deployment-url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.deploy-path }}
+      
+      - name: Cache deployment dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.deployment-cache
+          key: ${{ runner.os }}-deploy-${{ hashFiles('**/deployment-deps.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deploy-
+      
+      - name: Setup deployment tools
+        run: |
+          echo "Installing deployment tools..."
+          # Add commands to install deployment tools based on environment
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "Setting up production deployment tools"
+          else
+            echo "Setting up non-production deployment tools"
+          fi
+      
+      - name: Run pre-deployment checks
+        run: |
+          echo "Running pre-deployment validation..."
+          # Add commands for pre-deployment validation
+          # Example: Check if all required files exist
+          if [ ! -d "${{ inputs.deploy-path }}" ]; then
+            echo "Error: Deployment directory not found!"
+            exit 1
+          fi
+      
+      - name: Deploy to environment
+        id: deploy-step
+        run: |
+          echo "Deploying to ${{ inputs.environment }} environment"
+          # Add your deployment commands here based on the environment
+          # Example for different environments:
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "Running production deployment"
+            # Production-specific deployment commands
+            echo "::set-output name=deployment-url::https://www.example.com"
+          elif [[ "${{ inputs.environment }}" == "staging" ]]; then
+            echo "Running staging deployment"
+            # Staging-specific deployment commands
+            echo "::set-output name=deployment-url::https://staging.example.com"
+          else
+            echo "Running development deployment"
+            # Development-specific deployment commands
+            echo "::set-output name=deployment-url::https://dev.example.com"
+          fi
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          ENVIRONMENT_VARS: ${{ secrets.ENV_VARS }}
+      
+      - name: Run post-deployment verification
+        run: |
+          echo "Verifying deployment..."
+          # Add commands to verify the deployment was successful
+          # Example: Health check against the deployment URL
+          curl --fail --silent --output /dev/null ${{ steps.deploy-step.outputs.deployment-url }} || {
+            echo "Deployment verification failed!"
+            exit 1
+          }
+      
+      - name: Notify deployment status
+        if: always()
+        run: |
+          DEPLOY_STATUS="${{ job.status }}"
+          echo "Deployment to ${{ inputs.environment }} status: $DEPLOY_STATUS"
+          # Add notification commands (e.g., Slack, email)
+          # This step runs even if previous steps fail
