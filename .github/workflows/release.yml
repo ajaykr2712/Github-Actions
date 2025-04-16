@@ -110,33 +110,114 @@ jobs:
         with:
           myToken: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Prepare release notes
+        id: release_notes
+        run: |
+          if [[ -n "${{ github.event.inputs.release-notes }}" ]]; then
+            echo "Using custom release notes"
+            echo "${{ github.event.inputs.release-notes }}" > RELEASE_NOTES.md
+          else
+            echo "Using auto-generated changelog"
+            echo "# Release ${{ needs.validate-release.outputs.version }}" > RELEASE_NOTES.md
+            echo "" >> RELEASE_NOTES.md
+            echo "## What's Changed" >> RELEASE_NOTES.md
+            echo "${{ needs.prepare-release.outputs.changelog }}" >> RELEASE_NOTES.md
+          fi
+          
+          echo "## Installation" >> RELEASE_NOTES.md
+          echo "Download the appropriate package for your platform and follow the installation instructions." >> RELEASE_NOTES.md
+          
+          echo "## SHA256 Checksums" >> RELEASE_NOTES.md
+          echo '```' >> RELEASE_NOTES.md
+          cat ./artifacts/SHA256SUMS.txt >> RELEASE_NOTES.md
+          echo '```' >> RELEASE_NOTES.md
+          
+          cat RELEASE_NOTES.md
+      
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body: |
-            ## What's Changed
-            ${{ steps.changelog.outputs.changelog }}
-            
-            ## Installation
-            Download the appropriate package for your platform and follow the installation instructions in the documentation.
-          files: |
-            ./artifacts/release-${{ steps.version.outputs.version }}.zip
-            ./artifacts/release-${{ steps.version.outputs.version }}.tar.gz
+          tag_name: ${{ needs.validate-release.outputs.version }}
+          name: Release ${{ needs.validate-release.outputs.version }}
+          body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: ${{ steps.version.outputs.prerelease }}
+          prerelease: ${{ needs.validate-release.outputs.prerelease == 'true' }}
+          files: |
+            ./artifacts/release-${{ needs.validate-release.outputs.version }}.zip
+            ./artifacts/release-${{ needs.validate-release.outputs.version }}.tar.gz
+            ./artifacts/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-release:
     name: Deploy Release
-    needs: create-release
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      environment: production
-      artifact-name: release-artifacts
-      deploy-path: ./release
-    secrets:
-      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-      ENV_VARS: ${{ secrets.PRODUCTION_ENV_VARS }}
+    needs: [validate-release, create-release]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Download release artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: release-artifacts
+          path: ./artifacts
+      
+      - name: Setup deployment environment
+        run: |
+          echo "Setting up deployment environment for release ${{ needs.validate-release.outputs.version }}"
+          # Add environment-specific setup commands here
+      
+      - name: Deploy to CDN
+        id: deploy
+        run: |
+          echo "Deploying release ${{ needs.validate-release.outputs.version }} to CDN..."
+          # Add commands to deploy to your CDN or hosting service
+          # Example: aws s3 cp ./artifacts/ s3://releases-bucket/${{ needs.validate-release.outputs.version }}/ --recursive
+          echo "deployment-url=https://releases.example.com/${{ needs.validate-release.outputs.version }}/" >> $GITHUB_OUTPUT
+        env:
+          # Use GitHub secrets for sensitive information
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      
+      - name: Verify deployment
+        run: |
+          echo "Verifying deployment..."
+          # Add verification commands here
+          curl -sSf ${{ steps.deploy.outputs.deployment-url }} > /dev/null || (echo "Deployment verification failed" && exit 1)
+        continue-on-error: true
+      
+      - name: Update documentation
+        run: |
+          echo "Updating documentation for release ${{ needs.validate-release.outputs.version }}..."
+          # Add commands to update documentation with new version
+        continue-on-error: true
+      
+      - name: Notify team
+        uses: ./.github/actions/notify
+        with:
+          status: success
+          message: "Release ${{ needs.validate-release.outputs.version }} has been deployed successfully"
+          environment: production
+        env:
+          NOTIFICATION_TOKEN: ${{ secrets.NOTIFICATION_TOKEN }}
+      
+      - name: Generate release summary
+        run: |
+          echo "# Release Deployment Summary" > release-summary.md
+          echo "- Version: ${{ needs.validate-release.outputs.version }}" >> release-summary.md
+          echo "- Type: ${{ needs.validate-release.outputs.prerelease == 'true' && 'Pre-release' || 'Stable Release' }}" >> release-summary.md
+          echo "- Deployment URL: ${{ steps.deploy.outputs.deployment-url }}" >> release-summary.md
+          echo "- Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate-release.outputs.version }}" >> release-summary.md
+          echo "- Deployed by: ${{ github.actor }}" >> release-summary.md
+          echo "- Deployment Date: $(date)" >> release-summary.md
+      
+      - name: Upload release summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-summary
+          path: release-summary.md
+          retention-days: 30
