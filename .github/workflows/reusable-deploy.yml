@@ -94,15 +94,48 @@ jobs:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
           ENVIRONMENT_VARS: ${{ secrets.ENV_VARS }}
       
-      - name: Run post-deployment verification
+      - name: Set deployment status
+        id: status
         run: |
-          echo "Verifying deployment..."
-          # Add commands to verify the deployment was successful
-          # Example: Health check against the deployment URL
-          curl --fail --silent --output /dev/null ${{ steps.deploy-step.outputs.deployment-url }} || {
-            echo "Deployment verification failed!"
-            exit 1
-          }
+          if [[ "${{ steps.verification.outcome }}" == "success" || "${{ inputs.validate-deployment }}" != "true" ]]; then
+            echo "result=success" >> $GITHUB_OUTPUT
+          else
+            echo "result=failure" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate deployment report
+        run: |
+          echo "# Deployment Report" > deployment-report.md
+          echo "## Environment: ${{ inputs.environment }}" >> deployment-report.md
+          echo "- Deployment URL: ${{ steps.deploy-step.outputs.deployment-url }}" >> deployment-report.md
+          echo "- Status: ${{ steps.status.outputs.result }}" >> deployment-report.md
+          echo "- Duration: ${{ steps.deploy-step.outputs.deployment-duration }} seconds" >> deployment-report.md
+          echo "- Timestamp: $(date)" >> deployment-report.md
+          
+          if [[ "${{ steps.status.outputs.result }}" == "success" ]]; then
+            echo "- Verification: Passed" >> deployment-report.md
+          else
+            echo "- Verification: Failed" >> deployment-report.md
+            echo "  Please check the logs for more details." >> deployment-report.md
+          fi
+      
+      - name: Upload deployment report
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-report-${{ inputs.environment }}
+          path: deployment-report.md
+          retention-days: 7
+      
+      - name: Send deployment notification
+        if: always() && secrets.NOTIFICATION_TOKEN != ''
+        uses: ./.github/actions/notify
+        with:
+          status: ${{ steps.status.outputs.result }}
+          message: "Deployment to ${{ inputs.environment }} ${{ steps.status.outputs.result == 'success' && 'completed successfully' || 'failed' }}"
+          environment: ${{ inputs.environment }}
+          url: ${{ steps.deploy-step.outputs.deployment-url }}
+        env:
+          NOTIFICATION_TOKEN: ${{ secrets.NOTIFICATION_TOKEN }}
       
       - name: Notify deployment status
         if: always()
