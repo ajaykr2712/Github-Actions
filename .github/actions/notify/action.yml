@@ -1,0 +1,71 @@
+name: 'Deployment Notification Action'
+description: 'Sends notifications about deployment status to various channels'
+
+inputs:
+  status:
+    description: 'Deployment status (success, failure, cancelled)'
+    required: true
+  message:
+    description: 'Notification message'
+    required: true
+  environment:
+    description: 'Deployment environment'
+    required: true
+    default: 'production'
+  url:
+    description: 'Deployment URL'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set notification color
+      id: color
+      shell: bash
+      run: |
+        if [[ "${{ inputs.status }}" == "success" ]]; then
+          echo "color=good" >> $GITHUB_OUTPUT
+        elif [[ "${{ inputs.status }}" == "cancelled" ]]; then
+          echo "color=warning" >> $GITHUB_OUTPUT
+        else
+          echo "color=danger" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Send Slack notification
+      if: env.NOTIFICATION_TOKEN != ''
+      shell: bash
+      run: |
+        curl -X POST -H 'Content-type: application/json' \
+        --data "{
+          \"text\": \"*${{ inputs.environment }}* Deployment ${{ inputs.status }}\",${{ inputs.url != '' && '
+          \"attachments\": [{
+            \"color\": \"'${{ steps.color.outputs.color }}'\",
+            \"title\": \"'${{ inputs.message }}'\",
+            \"title_link\": \"'${{ inputs.url }}'\",
+            \"text\": \"Deployed by: ${{ github.actor }}\"${{ github.event.head_commit.message != '' && ',
+            \"fields\": [{
+              \"title\": \"Commit Message\",
+              \"value\": \"'${{ github.event.head_commit.message }}'\",
+              \"short\": false
+            }]' || '' }}
+          }]' || '' }}
+        }" \
+        ${{ secrets.SLACK_WEBHOOK_URL || 'https://hooks.slack.com/services/your/webhook/url' }}
+      env:
+        NOTIFICATION_TOKEN: ${{ env.NOTIFICATION_TOKEN }}
+
+    - name: Send email notification
+      if: inputs.status == 'failure' && env.NOTIFICATION_TOKEN != ''
+      shell: bash
+      run: |
+        echo "Sending email notification for failed deployment in ${{ inputs.environment }}..."
+        # This is a placeholder for email notification logic
+        # In a real implementation, you would use a service like SendGrid, AWS SES, etc.
+      env:
+        NOTIFICATION_TOKEN: ${{ env.NOTIFICATION_TOKEN }}
+
+    - name: Log notification
+      shell: bash
+      run: |
+        echo "::notice::Deployment notification sent for ${{ inputs.environment }} - Status: ${{ inputs.status }}"
