@@ -1,0 +1,105 @@
+name: 'Deployment Action'
+description: 'Standardized deployment action for various environments'
+
+inputs:
+  environment:
+    description: 'Target environment for deployment (dev, staging, production)'
+    required: true
+  artifact-path:
+    description: 'Path to the deployment artifacts'
+    required: true
+    default: './dist'
+  validate-deployment:
+    description: 'Whether to validate the deployment after completion'
+    required: false
+    default: 'true'
+  timeout:
+    description: 'Deployment timeout in minutes'
+    required: false
+    default: '5'
+
+outputs:
+  deployment-url:
+    description: 'URL of the deployed application'
+    value: ${{ steps.deploy-step.outputs.deployment-url }}
+  deployment-duration:
+    description: 'Duration of the deployment in seconds'
+    value: ${{ steps.deploy-step.outputs.deployment-duration }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ ! -d "${{ inputs.artifact-path }}" ]; then
+          echo "::error::Artifact path '${{ inputs.artifact-path }}' does not exist!"
+          exit 1
+        fi
+        
+        echo "Deploying to ${{ inputs.environment }} environment"
+    
+    - name: Setup environment-specific configuration
+      shell: bash
+      run: |
+        # Set environment-specific variables
+        if [[ "${{ inputs.environment }}" == "production" ]]; then
+          echo "DEPLOY_URL=https://www.example.com" >> $GITHUB_ENV
+          echo "CONFIG_PROFILE=production" >> $GITHUB_ENV
+        elif [[ "${{ inputs.environment }}" == "staging" ]]; then
+          echo "DEPLOY_URL=https://staging.example.com" >> $GITHUB_ENV
+          echo "CONFIG_PROFILE=staging" >> $GITHUB_ENV
+        else
+          echo "DEPLOY_URL=https://dev.example.com" >> $GITHUB_ENV
+          echo "CONFIG_PROFILE=development" >> $GITHUB_ENV
+        fi
+    
+    - name: Deploy to environment
+      id: deploy-step
+      shell: bash
+      run: |
+        echo "Starting deployment to ${{ inputs.environment }}..."
+        START_TIME=$(date +%s)
+        
+        # Environment-specific deployment logic
+        if [[ "${{ inputs.environment }}" == "production" ]]; then
+          echo "Running production deployment"
+          # Production-specific deployment commands
+          # Example: aws s3 sync ${{ inputs.artifact-path }} s3://production-bucket/ --delete
+        elif [[ "${{ inputs.environment }}" == "staging" ]]; then
+          echo "Running staging deployment"
+          # Staging-specific deployment commands
+          # Example: aws s3 sync ${{ inputs.artifact-path }} s3://staging-bucket/ --delete
+        else
+          echo "Running development deployment"
+          # Development-specific deployment commands
+          # Example: aws s3 sync ${{ inputs.artifact-path }} s3://dev-bucket/ --delete
+        fi
+        
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        
+        echo "deployment-url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+        echo "deployment-duration=$DURATION" >> $GITHUB_OUTPUT
+        
+        echo "Deployment completed in $DURATION seconds"
+      env:
+        DEPLOY_TOKEN: ${{ env.DEPLOY_TOKEN }}
+        ENVIRONMENT_VARS: ${{ env.ENV_VARS }}
+    
+    - name: Verify deployment
+      id: verification
+      if: inputs.validate-deployment == 'true'
+      shell: bash
+      run: |
+        echo "Verifying deployment..."
+        # Add commands to verify the deployment was successful
+        # Example: Health check against the deployment URL
+        curl --fail --silent --output /dev/null ${{ steps.deploy-step.outputs.deployment-url }} || {
+          echo "::error::Deployment verification failed!"
+          exit 1
+        }
+        
+        echo "Deployment verification successful"
+      timeout-minutes: ${{ fromJSON(inputs.timeout) }}
+      continue-on-error: true
